@@ -203,16 +203,22 @@ When the list grows past ~10 items, also offer at the end: "Хочешь — с�
 **Output a vertical numbered list, NOT a markdown table.** The user reads on mobile and tables force horizontal scroll. Each place = a short block, ~2-3 lines:
 
 ```
-1. **Name** (name_native if different) — Xm/X km · ~Y ₺ · ⭐ R (N reviews) · ✅ открыто (до HH:MM)
+1. **Name** (name_native if different) — Xm/X km · 💵 price · ⭐ R (N reviews) · ✅ открыто (до HH:MM)
    📍 [карта](view-url) · 🚶 [маршрут](dir-url) · 🌐 [сайт](website)
    One-to-two-sentence description: what kind of food, vibe, why pick it.
 ```
 
 Rules:
 - **Always** include the 📍 map link and (when user origin coords are known) the 🚶 directions link, inline, on its own line directly under the title. The user wants links front-and-center, not buried.
+- **Always** include a 💵 price field. Format:
+  - Restaurants/cafes — `💵 ~300 ₺` (`avg_bill_try`), or `$`/`$$`/`$$$`/`$$$$` from `price_tier` if no exact bill.
+  - Ticketed sights (museums, mosques with paid entry, towers, cisterns) — `💵 ~X ₺` and, when residents and foreigners pay differently, format as `💵 ~X ₺ (граждане TR) / ~Y ₺ (иностранцы)`. Note the currency too if the official price is in EUR/USD: `💵 ~25 € (~900 ₺)`.
+  - Free sights (most mosques outside paid hours, parks, bazaars to enter) — `💵 🆓 бесплатно`.
+  - Unknown — `💵 ❓ цена не верифицирована` and offer to fetch from the official site on next pass.
+  - Turkish lira inflates fast. When pulling prices from memory, append `(на дату последней проверки)` and always offer to re-verify via the official site through `pg_net`.
 - Drop any field that is empty — no `⭐ —` placeholders. If hours are unknown, write `❓ часы не верифицированы`. If website is missing, skip the 🌐 chip entirely.
-- Distance formatted as `120 м` (under 1 km) or `1.1 км` (above). Price as `~300 ₺` or `$`/`$$`/`$$$`/`$$$$` from `price_tier` when no `avg_bill_try`.
-- Description: 1-2 sentences. What you eat there + the vibe. Don't repeat what's in the metadata (no "рейтинг 4.6, цена 300₺").
+- Distance formatted as `120 м` (under 1 km) or `1.1 км` (above).
+- Description: 1-2 sentences. What you eat/see there + the vibe. Don't repeat what's in the metadata.
 
 Sort by distance unless the user asked otherwise (importance, rating, price).
 
