@@ -97,7 +97,8 @@ USER.md
 !.agent/workflows/
 /local/
 package-lock.json
-.claude/
+.claude/*
+!.claude/skills/
 .agents/
 .agents
 .agent/
