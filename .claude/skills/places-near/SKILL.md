@@ -175,22 +175,27 @@ https://www.google.com/maps/dir/?api=1&origin=<USER_LAT>,<USER_LON>&destination=
 
 ## Step 4: Format the response
 
-Output a compact markdown table sorted by distance. **Adapt columns to what's filled** — don't show empty columns. Possible columns:
+**Output a vertical numbered list, NOT a markdown table.** The user reads on mobile and tables force horizontal scroll. Each place = a short block, ~2-3 lines:
 
-| # | Место | Расст. | Чек | ⭐ | Сейчас | 📍 | 🚶 | 🌐 |
+```
+1. **Name** (name_native if different) — Xm/X km · ~Y ₺ · ⭐ R (N reviews) · ✅ открыто (до HH:MM)
+   📍 [карта](view-url) · 🚶 [маршрут](dir-url) · 🌐 [сайт](website)
+   One-to-two-sentence description: what kind of food, vibe, why pick it.
+```
 
-- **Место** — `name` (and `name_native` in parens if different)
-- **Расст.** — `dist_m` formatted as `120 м` or `1.1 км`
-- **Чек** — `avg_bill_try` as `300 ₺` (or use `price_tier` 1-4 as `$`, `$$`, `$$$`, `$$$$` if no avg_bill)
-- **⭐** — `rating` (e.g. `4.6 (5.9k)`) if present
-- **Сейчас** — `✅ открыто` / `❌ закрыто` / `❓` (when today_hours is NULL); add short hours like `(до 23:00)` when open
-- **📍** — markdown link "карта" → view-on-map URL
-- **🚶** — markdown link "маршрут" → directions URL (only if you have user's origin coords)
-- **🌐** — markdown link "сайт" → `website` (only if filled)
+Rules:
+- **Always** include the 📍 map link and (when user origin coords are known) the 🚶 directions link, inline, on its own line directly under the title. The user wants links front-and-center, not buried.
+- Drop any field that is empty — no `⭐ —` placeholders. If hours are unknown, write `❓ часы не верифицированы`. If website is missing, skip the 🌐 chip entirely.
+- Distance formatted as `120 м` (under 1 km) or `1.1 км` (above). Price as `~300 ₺` or `$`/`$$`/`$$$`/`$$$$` from `price_tier` when no `avg_bill_try`.
+- Description: 1-2 sentences. What you eat there + the vibe. Don't repeat what's in the metadata (no "рейтинг 4.6, цена 300₺").
 
-After the table, give a 2-3 line recommendation: which one to pick for the current time and why (open status + rating + bill).
+Sort by distance unless the user asked otherwise (importance, rating, price).
 
-If many rows have `today_hours = null` (unverified hours), add a one-line disclaimer: "У части мест часы не верифицированы — статус «❓» означает «не знаю», а не «закрыто»."
+After the list, give a 2-3 line recommendation: which one to pick for the current time and why (open status + rating + bill).
+
+If many rows lack `hours_verified`, add a one-line disclaimer at the end: "У части мест часы не верифицированы — «❓» = «не знаю», а не «закрыто»."
+
+When mixing DB rows and web-augmented suggestions, group them under two simple headings (`## Из БД` and `## Новые предложения`) but keep the same list format inside both — no tables.
 
 ## Step 5: Offer enrichment (optional)
 
