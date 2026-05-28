@@ -1,19 +1,19 @@
 ---
 name: places-near
-description: Personal location + places skill backed by Supabase project `mpwdfhxteupddyjwxcai`. **Default skill for ANY Istanbul travel/location/shopping/sightseeing/planning question**, plus all "near me / route / where am I" intents in any city. Handles — (1) "where am I" / "ещё раз геопозицию" → resolve current location via on-demand Telegram pin and return coords + Google Maps link, (2) "what's nearby" / "что рядом" / "куда сходить" → ranked list of POIs from `ic_places` with distance, bill, open/closed status, view + walking links, (3) "построй маршрут от X до Y" / "route X to Y" → Google Maps directions URL with the right travel mode, (4) "что в магазине/моле X" / "какие магазины в Y" / "что есть в Z" / clustering and planning across multiple POIs (sneaker shops, malls, sights). Location is fetched on-demand by prompting the user's Telegram bot (NOT live tracking). The user is currently based in Istanbul — treat any Istanbul place/topic as a trigger, do NOT wait for them to say "near me".
+description: Personal location + places skill backed by Supabase project `mpwdfhxteupddyjwxcai`. **Default skill for ANY Istanbul travel/location/shopping/sightseeing/planning question**, plus all "near me / route / where am I" intents in any city. Handles — (1) "where am I" / "ещё раз геопозицию" → return user's current pin + Google Maps link, (2) "what's nearby" / "что рядом" / "куда сходить" → ranked list of POIs from `ic_places` with distance, bill, open/closed status, view + walking links, (3) "построй маршрут от X до Y" / "route X to Y" → Google Maps directions URL with the right travel mode, (4) "что в магазине/моле X" / "какие магазины в Y" / "что есть в Z" / clustering and planning across multiple POIs (sneaker shops, malls, sights). Location flow: the Telegram webhook accepts every ping (live-share and one-shot), so the last known pin from `user_locations` is usually fresh. The skill reads it silently when it's <=30 min old, mentions the age between 30 min and 6 h, and only actively prompts the bot for a refresh past 6 h or when the user explicitly says they moved. The user lives in Istanbul — treat any Istanbul place/topic as a trigger, do NOT wait for "near me".
 ---
 
 # places-near
 
 Personal places + location lookup against Supabase project `mpwdfhxteupddyjwxcai`. Two tables in play:
 - `public.ic_places` — 166 curated POIs (Istanbul + other cities)
-- `public.user_locations` — last known user location (one row per pin, written by the Telegram webhook only when there is an active on-demand request)
+- `public.user_locations` — last known user location. The Telegram webhook writes every incoming ping (deduping near-identical pings to a single row that gets touched), so live-share automatically keeps the latest row fresh.
 
 ## Default mindset for Istanbul
 
 The user lives in / is travelling around Istanbul for the foreseeable future. Whenever they bring up **anything** that touches a location, a place, a route, a mall, a shop, a restaurant, an attraction, a district, planning a day, or "what's around X" — this skill is the default entry point. **You do not wait for an explicit "near me" cue.** The flow is always:
 
-1. **Check user position first.** Query `user_locations`. If stale (>5 min), fire `request-location` so we have a fresh pin before doing anything else — even if the user's question doesn't literally need their location, we'll need it the moment they say "and what's around" / "as I'm heading there".
+1. **Check user position first.** Read the latest row from `user_locations`. Use it silently if `age <= 30 min`; with a soft disclaimer if `30 min < age <= 6 h`; only actively request a fresh pin (Step 1.3) if `age > 6 h` or the user explicitly says they moved. Asking for a pin tap when we already have a usable row is friction the user explicitly rejected — do not do it.
 2. **Query `ic_places` for everything related** — shops, malls, sights, food — by name, category, district, or geo. The DB is the source of truth and is curated; lead with it.
 3. **Cross-check live status** — for any specific store/venue the user is about to physically visit, verify hours / "still open" via the web (Exa search or `WebFetch` of the official site). `business_status='OPERATIONAL'` in DB is not a substitute — places close, change hours, get renovated.
 4. **Augment from web only when DB is incomplete** — e.g. when listing tenants of a mall, our DB has just a couple of shops, but the actual mall has dozens. In that case fetch the mall's site (via `pg_net` from Supabase if outbound is restricted) and surface the full tenant list. Be explicit which items came from DB vs from the live web.
@@ -54,9 +54,12 @@ Accept any of these inputs (priority order):
    ORDER BY created_at DESC
    LIMIT 1;
    ```
-   - If `age_s <= 300` (5 min) → use it silently.
-   - Otherwise → go to step 1.3 (request a fresh pin on-demand).
-3. **Request a fresh pin from the bot (on-demand)** — the bot does not push location anymore; the AI explicitly asks for it.
+   - If `age_s <= 1800` (30 min) → **use it silently**, no friction, no button.
+   - If `1800 < age_s <= 21600` (≤6 h) → use it, but add a one-liner in your reply: "(точка N мин/ч назад — скажи если переместился)".
+   - If `age_s > 21600` (>6 h) **OR** the user explicitly says "I moved" / "got a new location" / "новое место" / "обнови" → go to step 1.3.
+
+   **Do not request a fresh pin just because the row is older than a few minutes.** The user lives in Istanbul, is usually stationary or moving on foot in a small radius. The webhook accepts every location ping (live-share and one-shots both), so a stale row often means the user simply paused live-share — not that they teleported. Refreshing constantly is friction they explicitly do not want.
+3. **Request a fresh pin from the bot (on-demand)** — only when step 1.2 says we need one. The webhook accepts pings continuously; this step actively prompts the user when their last pin is genuinely stale.
    1. **Fire the request.** `pg_net` is async — it queues the HTTP call, returns a row id, and the response lands in `net._http_response` ~1 sec later. Do both in one SQL block so the request goes out immediately:
       ```sql
       SELECT net.http_post(
