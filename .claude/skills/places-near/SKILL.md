@@ -173,6 +173,34 @@ https://www.google.com/maps/dir/?api=1&origin=<USER_LAT>,<USER_LON>&destination=
 
 **Arbitrary A → B route** (not anchored to user's current location) — when the user says "построй маршрут от X до Y", resolve both endpoints (same way as Step 1 — coords, Maps link, named landmark, or `ic_places` lookup), then build the dir URL with both `origin` and `destination` filled in. If origin or destination is an `ic_places` row, append `&origin_place_id=...` / `&destination_place_id=...` for cleaner pins.
 
+**All-on-one-map link (overview pin map).** Whenever you output a list of more than one place, **always** include one combined URL at the top of the list (above the numbered items) that shows every place as a pin on a single Google Maps view. The user explicitly wants this — they don't want to tap each row individually to see locations.
+
+The cleanest way: a single directions URL with the user's origin + the first N-1 places as `waypoints=` (pipe-separated `|`) + the last place as `destination=`. Google Maps will render every stop as a numbered pin on one map, and the route line is a useful side-effect, not the point.
+
+```
+https://www.google.com/maps/dir/?api=1
+&origin=<USER_LAT>,<USER_LON>
+&waypoints=<lat,lon>|<lat,lon>|<NameOrAddress>|...
+&destination=<lat,lon or Name>
+&travelmode=walking
+```
+
+Limits:
+- Google Maps URL API accepts up to **9 waypoints** + origin + destination (so ~10-11 stops total). If the list is longer, split into two/three overview links and label them ("первая половина" / "вторая половина") rather than truncating.
+- Waypoints can be `lat,lon` (best, no geocoding needed) or text like `Journey+Cihangir+Istanbul`. Prefer coords when you have them.
+- URL-encode spaces as `+`.
+
+Render it as the first line of the list, before the numbered items:
+
+```
+🗺️ [Все места на карте](<combined-dir-url>)
+
+1. **First place** ...
+2. **Second place** ...
+```
+
+When the list grows past ~10 items, also offer at the end: "Хочешь — соберу KML/GeoJSON-файл для импорта в Google My Maps, тогда будет вечная личная карта без лимита на пины."
+
 ## Step 4: Format the response
 
 **Output a vertical numbered list, NOT a markdown table.** The user reads on mobile and tables force horizontal scroll. Each place = a short block, ~2-3 lines:
